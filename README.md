@@ -1,19 +1,27 @@
 # Reddit Deletion Script
 
-Script to delete user comment and/or post history from Reddit (specifically old.reddit).
+## Features
+
+- Editing and deleting comments, separately or both combined
+
+- Deleting posts
+
+- Exclude subreddits or only include selected subreddits
+
+## How to use
+
+1. Select and copy index.js
+
+2. Open DevTools by pressing F12
+
+3. Paste the script in the tab titled "Console" then press Enter
+
+4. Type DeletionScript.start() then press Enter
 
 ## Planned Features
 
-- Edit comment before deleting (with adjustable delay)
-
 - Customizable edit options
-
-- Exclude subreddits, exact matches, or any
 
 - Exclude posts/comments if older/younger than DATE
 
 - Exclude posts/comments if scores is above or below a certain amount
-
-## How to use
-
-PLACEHOLDER
