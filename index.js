@@ -1,10 +1,11 @@
 //eslint-disable-next-line no-unused-vars
 const DeletionScript = (() => {
   const defaultEditMessage = "#**[*USER WAS BANNED FOR THIS POST*]**";
-  // Delay must be >= 4500 to prevent forced slowdown
-  const editDelay = 4500;
+  // Delay must be >= 3500 to prevent forced slowdown
+  const editDelay = 3500;
   const afterEditDeleteDelay = 60000;
-  const deleteDelay = 4000;
+  const deleteDelay = 3500;
+  const rateCheckDelay = 1500;
   let editIndex = 0;
   const placeholderEditMessages = [];
 
@@ -13,11 +14,37 @@ const DeletionScript = (() => {
 
   const excludeSubreddits = [].map((x) => x.toLowerCase());
 
+  const getRateLimit = (postable) => {
+    const rateText = postable
+      .querySelector(".error.RATELIMIT")
+      .textContent.match(/\d+/);
+    if (rateText === null) return 0;
+    return Number(rateText[0]);
+  };
+
+  const rateLimitWrapper = async (postable, action) => {
+    action();
+    await new Promise((resolve) =>
+      setTimeout(() => {
+        const forcedWait = getRateLimit(postable);
+        if (forcedWait === null) {
+          resolve(true);
+        } else {
+          setTimeout(() => {
+            action();
+            resolve(true);
+          }, forcedWait);
+        }
+      }, rateCheckDelay)
+    );
+    return true;
+  };
+
   const forEachPostable = async (action, delay, postables) => {
     for (let i = 0; i < postables.length; i += 1) {
       await new Promise((resolve) =>
-        setTimeout(() => {
-          action(postables[i]);
+        setTimeout(async () => {
+          await action(postables[i]);
           resolve(true);
         }, delay)
       );
@@ -48,7 +75,7 @@ const DeletionScript = (() => {
     removeInvalidPostables(document.querySelectorAll(".link"));
 
   const getSubreddit = (postable) => postable.dataset.subreddit;
-  const editComment = (comment) => {
+  const editComment = async (comment) => {
     comment.querySelector(".edit-usertext").click();
 
     if (!placeholderEditMessages.length) {
@@ -60,15 +87,17 @@ const DeletionScript = (() => {
         editIndex < placeholderEditMessages.length - 1 ? editIndex + 1 : 0;
     }
 
-    comment.querySelector(".save").click();
+    rateLimitWrapper(comment, () => comment.querySelector(".save").click());
+    return true;
   };
 
   const editComments = async () => {
     let editedComments = [];
     await forEachPostable(
-      (comment) => {
-        editComment(comment);
+      async (comment) => {
+        await editComment(comment);
         editedComments.push(comment);
+        return true;
       },
       editDelay,
       getComments()
@@ -78,12 +107,17 @@ const DeletionScript = (() => {
 
   const deletePostables = async (postables) => {
     await forEachPostable(
-      (postable) => {
+      async (postable) => {
         postable.querySelector(`[data-event-action="delete"]`).click();
-        postable
-          .querySelector(".option.error.active")
-          .querySelector(".yes")
-          .click();
+        await rateLimitWrapper(postable, () => {
+          if (postable.querySelector(".option.error.active") === null) {
+            return true;
+          }
+          postable
+            .querySelector(".option.error.active")
+            .querySelector(".yes")
+            .click();
+        });
       },
       deleteDelay,
       postables
@@ -123,10 +157,10 @@ const DeletionScript = (() => {
       loggingMessages("deletePosts");
       await deletePostables(getPosts());
     }
-
+    let editedComments = null;
     if (["comments", "all", "only edit comments"].includes(targetType)) {
       loggingMessages("editComments");
-      await editComments();
+      editedComments = await editComments();
     }
 
     if (["comments", "all", "only delete comments"].includes(targetType)) {
@@ -137,7 +171,9 @@ const DeletionScript = (() => {
         }, afterEditDeleteDelay)
       );
       loggingMessages("deleteComments");
-      await deletePostables(getComments());
+      await deletePostables(
+        editedComments === null ? getComments() : editedComments
+      );
     }
   };
   return { start };
